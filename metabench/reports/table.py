@@ -17,8 +17,26 @@ def _num(value: float | None, digits: int = 4) -> str:
 
 def row_for(summary: dict[str, Any]) -> Sequence[str]:
     metrics = summary["metrics"]
-    ci, pi, pi_t = metrics["ci"], metrics["pi"], metrics["pi_t"]
     rates = metrics["rates"]
+    if "joint_new" in metrics:                       # multivariate region
+        joint, mean = metrics["joint_new"], metrics["joint_mean"]
+        marginal = metrics["marginal_new"]
+        per_outcome = " / ".join(_pct(m["estimate"]) for m in marginal)
+        return [
+            summary["scenario"]["scenario_id"],
+            summary["adapter"],
+            str(metrics["reps"]),
+            f"{_pct(joint['estimate'])} ±{_num(1.96 * joint['mcse'], 3)}",
+            f"{_pct(mean['estimate'])} ±{_num(1.96 * mean['mcse'], 3)}",
+            per_outcome,
+            _num(metrics["volume"], 4),
+            "—",
+            "—",
+            "—",
+            _pct(rates.get("failure_rate")),
+            _pct(rates.get("boundary_rate")),
+        ]
+    ci, pi, pi_t = metrics["ci"], metrics["pi"], metrics["pi_t"]
     return [
         summary["scenario"]["scenario_id"],
         summary["adapter"],
@@ -35,8 +53,9 @@ def row_for(summary: dict[str, Any]) -> Sequence[str]:
     ]
 
 
-HEADER = ("scenario", "adapter", "reps", "CI", "PI", "PI(t)", "CI width",
-          "PI width", "bias", "SE ratio", "fail", "boundary")
+HEADER = ("scenario", "adapter", "reps", "joint (new)", "joint (mean)",
+          "marginal (CI / PI)", "CI width / volume", "PI width / —",
+          "bias / —", "SE ratio / —", "fail", "boundary")
 
 
 def table(summaries: Sequence[dict[str, Any]]) -> str:

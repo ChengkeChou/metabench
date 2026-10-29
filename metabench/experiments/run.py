@@ -19,6 +19,7 @@ import numpy as np
 
 from .. import __version__ as metabench_version
 from ..adapters import get as get_adapter
+from ..metrics import multivariate as multivariate_metrics
 from ..metrics import summarise
 from ..scenarios import get as get_scenario
 from ..scenarios import simulate
@@ -66,11 +67,17 @@ def run(scenario_id: str, *, adapter_name: str, reps: int, seed: int,
             "software_version": adapter.version,
             "seed": seed,
             "level": level,
-            "truth": data.mu,
-            "truth_new": data.theta_new,
             "runtime": runtime,
             **fit.to_dict(),
         }
+        if scenario.family == "multivariate":
+            # the estimands are vectors: the mean vector and the true effects
+            # of one new study
+            row["truth_vec"] = [float(x) for x in data.mu]
+            row["truth_new_vec"] = [float(x) for x in data.theta_new]
+        else:
+            row["truth"] = float(data.mu)
+            row["truth_new"] = float(data.theta_new)
         records.append(row)
     duration = time.time() - started
 
@@ -89,7 +96,9 @@ def run(scenario_id: str, *, adapter_name: str, reps: int, seed: int,
         "seed": seed,
         "level": level,
         "duration_s": duration,
-        "metrics": summarise(records),
+        "metrics": (multivariate_metrics.summarise(records)
+                    if scenario.family == "multivariate"
+                    else summarise(records)),
     }
     (run_dir / f"summary_{stamp}.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

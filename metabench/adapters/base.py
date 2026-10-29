@@ -35,6 +35,13 @@ class FitRecord:
     valid_covariance: bool | None = None
     warnings: int = 0
     failure: str | None = None
+    #: a joint region, recorded as `(x - center)' cov^-1 (x - center) <= crit`
+    #: so that containment is decided by the metrics and not by the adapter
+    region_center: list[float] | None = None
+    region_cov: list[list[float]] | None = None
+    region_crit: float | None = None
+    marginal_lb: list[float] | None = None
+    marginal_ub: list[float] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
