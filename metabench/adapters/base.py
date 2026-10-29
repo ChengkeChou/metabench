@@ -7,7 +7,7 @@ reach inside.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
 
 
@@ -42,6 +42,12 @@ class FitRecord:
     region_crit: float | None = None
     marginal_lb: list[float] | None = None
     marginal_ub: list[float] | None = None
+    #: the estimated between-study covariance, when the estimand *is* a matrix
+    sigma_hat: list[list[float]] | None = None
+    #: family-specific quantities (objective values, reference optimum, ...).
+    #: Kept as a bag so that a new family does not have to grow this dataclass
+    #: and every old raw record stays readable.
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

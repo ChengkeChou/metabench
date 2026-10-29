@@ -19,6 +19,7 @@ import numpy as np
 
 from .. import __version__ as metabench_version
 from ..adapters import get as get_adapter
+from ..metrics import covariance as covariance_metrics
 from ..metrics import multivariate as multivariate_metrics
 from ..metrics import summarise
 from ..scenarios import get as get_scenario
@@ -44,6 +45,15 @@ def environment() -> dict[str, Any]:
         "processor": platform.processor(),
         "cpu_count": __import__("os").cpu_count(),
     }
+
+
+def _summarise_for(family: str, records: list[dict[str, Any]]) -> dict:
+    """The metrics module that knows what this family's estimand means."""
+    if family == "multivariate":
+        return multivariate_metrics.summarise(records)
+    if family == "covariance":
+        return covariance_metrics.summarise(records)
+    return summarise(records)
 
 
 def run(scenario_id: str, *, adapter_name: str, reps: int, seed: int,
@@ -75,6 +85,9 @@ def run(scenario_id: str, *, adapter_name: str, reps: int, seed: int,
             # of one new study
             row["truth_vec"] = [float(x) for x in data.mu]
             row["truth_new_vec"] = [float(x) for x in data.theta_new]
+        elif scenario.family == "covariance":
+            # the estimand is the whole matrix
+            row["truth_cov"] = [[float(x) for x in r] for r in data.Sigma]
         else:
             row["truth"] = float(data.mu)
             row["truth_new"] = float(data.theta_new)
@@ -96,9 +109,7 @@ def run(scenario_id: str, *, adapter_name: str, reps: int, seed: int,
         "seed": seed,
         "level": level,
         "duration_s": duration,
-        "metrics": (multivariate_metrics.summarise(records)
-                    if scenario.family == "multivariate"
-                    else summarise(records)),
+        "metrics": (_summarise_for(scenario.family, records)),
     }
     (run_dir / f"summary_{stamp}.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

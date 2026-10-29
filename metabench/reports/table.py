@@ -1,10 +1,18 @@
-"""Report tables generated from ``results/`` — never entered by hand."""
+"""Report tables generated from ``results/`` — never entered by hand.
+
+Each family has its own columns, because each family's estimand is a different
+kind of object: a scalar interval, an ellipsoid, or a matrix.  Forcing them into
+one header would mean reporting the covariance family's "coverage" as an empty
+cell, and an empty cell reads as "fine".
+"""
 
 from __future__ import annotations
 
 import json
 import pathlib
 from typing import Any, Sequence
+
+FAMILY_ORDER = ("univariate", "multivariate", "covariance")
 
 
 def _pct(value: float | None) -> str:
@@ -15,9 +23,44 @@ def _num(value: float | None, digits: int = 4) -> str:
     return "—" if value is None else f"{value:.{digits}f}"
 
 
-def row_for(summary: dict[str, Any]) -> Sequence[str]:
+def _gap(value: float | None) -> str:
+    """A log-likelihood difference, with anything below noise shown as zero."""
+    if value is None:
+        return "—"
+    return "0.00" if abs(value) < 5e-3 else f"{value:.2f}"
+
+
+def _family(summary: dict[str, Any]) -> str:
+    return summary.get("scenario", {}).get("family", "univariate")
+
+
+def row_for(summary: dict[str, Any]) -> list[str]:
     metrics = summary["metrics"]
     rates = metrics["rates"]
+    family = _family(summary)
+    if family == "covariance":
+        gap = metrics.get("gap", {})
+        frob = metrics.get("frobenius", {})
+        eig = metrics.get("min_eig_ratio", {})
+        margin = metrics.get("proportions", {}).get("suboptimal", {})
+        mcse = margin.get("mcse")
+        return [
+            summary["scenario"]["scenario_id"],
+            summary["adapter"],
+            str(metrics["reps"]),
+            str(metrics.get("usable", metrics["reps"])),
+            f"{_pct(margin.get('estimate'))} "
+            f"±{_num(1.96 * mcse, 3) if mcse is not None else '—'}",
+            _gap(gap.get("median")),
+            _gap(gap.get("max")),
+            _pct(rates.get("non_pd_rate")),
+            _pct(rates.get("boundary_rate")),
+            _pct(rates.get("multistart_conflict_rate")),
+            _num(frob.get("median"), 4),
+            _num(eig.get("median"), 3),
+            _num(metrics.get("tau2_relative_bias"), 3),
+            _num(metrics.get("rho_bias"), 3),
+        ]
     if "joint_new" in metrics:                       # multivariate region
         joint, mean = metrics["joint_new"], metrics["joint_mean"]
         marginal = metrics["marginal_new"]
@@ -53,17 +96,33 @@ def row_for(summary: dict[str, Any]) -> Sequence[str]:
     ]
 
 
-HEADER = ("scenario", "adapter", "reps", "joint (new)", "joint (mean)",
-          "marginal (CI / PI)", "CI width / volume", "PI width / —",
-          "bias / —", "SE ratio / —", "fail", "boundary")
+HEADERS: dict[str, tuple[str, ...]] = {
+    "univariate": ("scenario", "adapter", "reps", "CI", "PI", "PI(t)",
+                   "CI width", "PI width", "bias", "SE ratio", "fail",
+                   "boundary"),
+    "multivariate": ("scenario", "adapter", "reps", "joint (new)",
+                     "joint (mean)", "marginal (CI / PI)",
+                     "CI width / volume", "PI width / —", "bias / —",
+                     "SE ratio / —", "fail", "boundary"),
+    "covariance": ("scenario", "adapter", "reps", "usable", "suboptimal",
+                   "gap med", "gap max", "non-PD", "boundary", "multi-start",
+                   "Frob med", "min-eig", "tau2 bias", "rho bias"),
+}
 
 
 def table(summaries: Sequence[dict[str, Any]]) -> str:
-    lines = ["| " + " | ".join(HEADER) + " |",
-             "|" + "|".join(["---"] * len(HEADER)) + "|"]
-    for summary in summaries:
-        lines.append("| " + " | ".join(row_for(summary)) + " |")
-    return "\n".join(lines) + "\n"
+    chunks: list[str] = []
+    for family in FAMILY_ORDER:
+        rows = [s for s in summaries if _family(s) == family]
+        if not rows:
+            continue
+        header = HEADERS[family]
+        lines = ["| " + " | ".join(header) + " |",
+                 "|" + "|".join(["---"] * len(header)) + "|"]
+        for summary in rows:
+            lines.append("| " + " | ".join(row_for(summary)) + " |")
+        chunks.append("\n".join(lines))
+    return "\n\n".join(chunks) + "\n"
 
 
 def load(results: pathlib.Path, match: str | None = None) -> list[dict]:
