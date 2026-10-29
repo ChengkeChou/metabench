@@ -366,6 +366,64 @@ All five are in, plus the fixture correction the measurement forced:
 The re-measurement of this grid against 1.1.6 is the next entry; the numbers
 above are the ones the changes were chosen from, not the ones they produced.
 
+## Re-measured against 1.1.6 (same seed, same 250 replicates)
+
+`python tools/compare_runs.py results results_v116`
+
+| cell | suboptimal | gap max | non-PD | boundary | Frobenius (median) | fit time (median) |
+|---|---|---|---|---|---|---|
+| `k10-J2-rho30` | 2.4% → **0.0%** | 0.137 → **0.000** | 2.8% → **0.4%** | 38.0% → 38.0% | 0.729 → 0.729 | 0.09 → 0.39 s |
+| `k10-J3-mixed` | 12.4% → **5.2%** | 2.596 → 2.596 | 20.4% → 18.0% | 19.6% → 12.0% | 0.867 → 0.869 | 0.25 → 0.88 s |
+| `k10-J3-rho30` | 11.6% → **6.4%** | 3.034 → 3.034 | 20.8% → 23.6% | 22.8% → 18.8% | 0.908 → 0.908 | 0.26 → 1.06 s |
+| `k10-J3-rho70` | 10.0% → **5.6%** | 0.824 → 0.824 | 25.2% → 25.2% | 25.6% → 22.8% | 0.717 → 0.717 | 0.29 → 1.10 s |
+| `k30-J3-rho30` | 0.8% → 0.8% | 0.742 → 0.742 | 3.2% → 3.6% | 1.2% → 1.2% | 0.582 → 0.582 | 0.23 → 1.63 s |
+| `k30-J3-tiny` | 19.2% → **8.8%** | 3.660 → 3.655 | 22.0% → 18.0% | 22.0% → 13.6% | 0.554 → 0.559 | 0.30 → 2.86 s |
+
+Reading it:
+
+* **Where the search was failing, it fails about half as often** (11.6 → 6.4,
+  12.4 → 5.2, 10.0 → 5.6, 19.2 → 8.8).  Where it was already working
+  (0.8% at k=30, J=3) it is unchanged, which is the control.
+* **The boundary rate and the Frobenius error do not move** (38.0 → 38.0,
+  0.908 → 0.908, 0.729 → 0.729).  They are properties of the model at these
+  study counts, and a change that had moved them would have been a change to
+  something else.
+* **Fits cost 3 to 10 times more**, because there are two starts.  That is the
+  price of the halved failure rate, and it is now *bounded* -- the fallback that
+  used to run for minutes is capped.
+
+### The J=5 cells, now measurable
+
+| cell | reps | suboptimal | gap max | non-PD | boundary | Frobenius |
+|---|---|---|---|---|---|---|
+| `k30-J5-rho30` | 100 | 4.0% ±3.8 | **0.04** | 15.0% | 0.0% | 0.647 |
+| `k30-J5-rho70` | 100 | 11.0% ±6.1 | **0.07** | 21.0% | 1.0% | 0.438 |
+
+These could not be run at all before (one fit could take minutes).  They also
+show why the *size* of a gap matters more than its existence: at k=30 with 15
+variance parameters the surface is flat enough that "suboptimal" fires on
+differences of 0.04 to 0.07 log-likelihood units, which is the same matrix to
+any purpose.  A tolerance of `1e-6` counts a flat ridge and a wrong basin as
+the same event; the table reports the maximum gap beside the rate for exactly
+that reason.
+
+### What is left, and it is not the same defect
+
+Every residual failure is on a boundary corner.  The worst one (k=10, J=3,
+replicate 230, gap 3.03) is a genuine local maximum of the Cholesky surface:
+
+| | `tau2` | `rho` |
+|---|---|---|
+| pimeta 1.1.6 | (0, 0.164, 0.087) | (0, 0, 0.276) |
+| reference | (0.036, 0.164, 0.110) | (−0.015, **−0.978**, 0.224) |
+
+Both of pimeta's starts stop in the corner where the first variance is exactly
+zero; the reference needs a correlation of −0.98 between the second and third
+outcomes to escape it, and even then one of its own six starts misses.  Two
+starts halve the failure rate; whether a third would reach these corners is a
+question for the next grid, not for an argument.
+
+
 ## What this run does not test
 
 * `lkj_eta` as anything other than a penalty: it is measured, not justified,

@@ -1,8 +1,8 @@
-# Raw records are evidence: they are written by a run and never edited.
+﻿# Raw records are evidence: they are written by a run and never edited.
 # They are kept out of version control because they are large and because a
 # result must be reproducible from the code plus the manifest, not from a
 # checked-in artefact that no one can regenerate.
-results/
+results*/
 __pycache__/
 *.pyc
 .pytest_cache/
