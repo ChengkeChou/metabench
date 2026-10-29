@@ -88,28 +88,40 @@ truth would have declared every honest fit suboptimal**, and the only reason it
 was caught is that the harness records what the reference found as well as what
 the library returned.
 
-## Cost, and why the J=5 cells carry fewer replicates
+## Cost
 
-`rma_mv` at k=30, J=5 takes about nine seconds per fit, against 0.03 s at
-k=30, J=3.  The cause is structural, and it splits into two measurable pieces:
+At k=30, J=5 (150 rows, 15 variance parameters) `rma_mv` in 1.1.5 took about
+nine seconds per fit in the worst data set measured and 4.5 s in a common one,
+against 0.03 s at k=30, J=3.  The cause is structural, and it splits into two
+measurable pieces:
 
-| quantity (k=30, J=5, 150x150) | measured |
+| quantity (k=30, J=5, 150x150) | measured in 1.1.5 |
 |---|---|
 | `comp.make_D(params)` | 0.2 ms |
-| `_mv_loglik` (one 150x150 inverse plus determinants) | **16.2 ms** |
-| the same likelihood evaluated block-wise | 0.109 ms |
+| `_mv_loglik` (one 150x150 inverse plus determinants) | **12.8-16.2 ms** |
+| the same likelihood evaluated block-wise (a reference implementation) | 0.109-0.37 ms |
 
 The model is block diagonal, so the likelihood is `O(k J^3)`; the
-implementation materialises the whole `kJ x kJ` matrix and pays `O((kJ)^3)`,
-which is 149x more work per evaluation at this size and grows like `k^2` after
-that.  One J=5 fit costs as much as 83,000 block evaluations where an L-BFGS-B
-run needs hundreds.
+implementation materialises the whole `kJ x kJ` matrix and pays `O((kJ)^3)`.
+1.1.6 evaluates it block by block instead, one block at a time:
 
-That is why the two J=5 cells are **not reported**: 100 replicates would have
-been a multi-hour job and still too few to estimate a 10% rate, and a rate
-estimated from a handful of replicates is worse than no rate.  The budget went
-where a proportion can be estimated, not where the software is the bottleneck. 
-The measurement itself is the first entry for the 1.1.6 performance baseline.
+| quantity (k=30, J=5) | 1.1.5 | 1.1.6 |
+|---|---|---|
+| one evaluation of the likelihood | 12.8 ms | **0.85 ms** |
+| one fit, common data set | 4.5 s | **1.9 s** |
+| one fit, slowest data set measured (it hits the stall fallback) | 9.2 s | **4.6 s** |
+| best block implementation measured on the same data (batched `inv`) | — | 0.11-0.37 ms |
+
+The per-fit gain is smaller than the per-evaluation gain because a fit now runs
+two starts -- the change that halved the suboptimal rate. And pimeta's blocked
+path is still 2-8x above the best block implementation measured here, because it
+loops over blocks in numpy rather than stacking them into one `(k, J, J)` array:
+call overhead, not arithmetic. That is the next step, not this release.
+
+This is why the two J=5 cells carried no replicates before: a fit could take
+minutes once the stall fallback fired, and the fallback was allowed 100,000
+evaluations.  With both the block path and the 1,000-evaluation cap they are now
+measurable, and the results below include them for the first time.
 
 ## Results
 
@@ -326,9 +338,9 @@ be addressed before the label is available.
 In the order the measurements justify:
 
 1. **Evaluate the likelihood block-wise when the structure is block diagonal.**
-   16.2 ms against 0.109 ms per evaluation at k=30, J=5, improving like `k^2`
-   for larger studies.  A pure win with no statistical content, and it is what
-   makes 2000-replicate runs affordable.
+   Implemented in 1.1.6: 12.8 ms against 0.85 ms per evaluation at k=30, J=5,
+   with a batched implementation measured at 0.11-0.37 ms on the same data as
+   the next step.
 2. **Multi-start, or a start that is not the method-of-moments point.**  The
    reference needs six starts to be reliable where `pimeta` fails one time in
    ten, and `chol`'s restarts agree 99.3% of the time — so two or three starts
@@ -355,8 +367,8 @@ All five are in, plus the fixture correction the measurement forced:
 
 | item | measurement before | after |
 |---|---|---|
-| block-wise likelihood | 16.2 ms per evaluation (k=30, J=5) | **0.37 ms** |
-| one fit at k=30, J=5 | 9.0 s | **1.0-1.7 s** |
+| block-wise likelihood | 12.8 ms per evaluation (k=30, J=5) | **0.85 ms** |
+| one fit at k=30, J=5 | 4.5-9.2 s | **1.9-4.6 s** |
 | single start | 11.6% of fits below the maximum | second start on the opposite side of the box |
 | stall fallback | up to 100,000 evaluations | 1,000 (unchanged for `GEN`, which needs it) |
 | cone barrier | `1e5`, 78% restart disagreement | `1e2`, proportional to the deficit |
