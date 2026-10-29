@@ -83,4 +83,6 @@ def test_the_external_variant_reproduces_pimeta_s_external_vector():
     external = to_external(np.asarray(G, dtype=float))
     assert external.size == 6                       # three tau2, three rho
     assert np.allclose(external[:3], np.diag(G), atol=0.0)
-    assert np.all(np.abs(external[3:]) < 1.0)
+    # at most one: the maximum at k=10, J=3 is often *on* the cone boundary,
+    # which is the finding this cell exists for
+    assert np.all(np.abs(external[3:]) <= 1.0)

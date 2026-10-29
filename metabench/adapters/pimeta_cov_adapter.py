@@ -103,8 +103,10 @@ class PimetaCovAdapter:
         mapping_gap = float(np.max(np.abs(Sigma - mapping * R)))
 
         # --- the independent optimum on the same data ----------------------
+        studies = np.asarray(data.frame["study"])
         reference = fit_un(data.yi, data.V, data.X, variant=self.variant,
-                           n_starts=self.n_starts, fixed_rho=truth_rho)
+                           n_starts=self.n_starts, fixed_rho=truth_rho,
+                           groups=studies)
         ll_at_fit = un_reml_nll(data.yi, data.V, data.X, Sigma)
 
         record.sigma_hat = [[float(x) for x in row] for row in Sigma]

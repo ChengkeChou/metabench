@@ -349,6 +349,23 @@ In the order the measurements justify:
 5. **Close the NaN path**: `sqrt(max(., 0))` in `from_chol_vec`, and reject a
    non-finite matrix before it reaches `slogdet`.
 
+## Implemented in 1.1.6
+
+All five are in, plus the fixture correction the measurement forced:
+
+| item | measurement before | after |
+|---|---|---|
+| block-wise likelihood | 16.2 ms per evaluation (k=30, J=5) | **0.37 ms** |
+| one fit at k=30, J=5 | 9.0 s | **1.0-1.7 s** |
+| single start | 11.6% of fits below the maximum | second start on the opposite side of the box |
+| stall fallback | up to 100,000 evaluations | 1,000 (unchanged for `GEN`, which needs it) |
+| cone barrier | `1e5`, 78% restart disagreement | `1e2`, proportional to the deficit |
+| `sqrt` of `diag(L L')` | 248-572 warnings per fit | clipped at zero |
+| profile at `rho = -0.7` | metafor's interior point (1.3104116) | the boundary maximum (1.3813334) |
+
+The re-measurement of this grid against 1.1.6 is the next entry; the numbers
+above are the ones the changes were chosen from, not the ones they produced.
+
 ## What this run does not test
 
 * `lkj_eta` as anything other than a penalty: it is measured, not justified,

@@ -84,7 +84,8 @@ class UNLikelihood:
     `pimeta` receives.
     """
 
-    def __init__(self, y: np.ndarray, V: np.ndarray, X: np.ndarray) -> None:
+    def __init__(self, y: np.ndarray, V: np.ndarray, X: np.ndarray,
+                 groups: np.ndarray | None = None) -> None:
         y = np.asarray(y, dtype=float).ravel()
         self.X = np.asarray(X, dtype=float)
         self.n_obs, self.J = self.X.shape
@@ -92,23 +93,34 @@ class UNLikelihood:
         if self.k * self.J != self.n_obs:
             raise ValueError(f"{self.n_obs} rows cannot be split into studies "
                              f"of {self.J} outcomes")
-        self.Y = y.reshape(self.k, self.J)
+        self.Y = y
         V = np.asarray(V, dtype=float)
-        self.V_blocks = np.asarray([
-            V[s * self.J:(s + 1) * self.J, s * self.J:(s + 1) * self.J]
-            for s in range(self.k)])
+        # The blocks are *given*, not assumed: a caller whose rows are not
+        # study-major would otherwise get a perfectly plausible likelihood for
+        # a data set that does not exist.  Measured consequence of assuming the
+        # layout: on the confint fixture (rows ordered by outcome) this
+        # function disagreed with `pimeta`'s own likelihood by 1.88 units at the
+        # same matrix, which looked like a library bug for an hour.
+        if groups is None:
+            groups = np.repeat(np.arange(self.k), self.J)
+        self.groups = np.asarray(groups).ravel()
+        if self.groups.shape[0] != self.n_obs:
+            raise ValueError("'groups' must have one entry per row")
+        self.blocks: list[np.ndarray] = [
+            np.flatnonzero(self.groups == g) for g in np.unique(self.groups)]
+        for idx in self.blocks:
+            if not np.allclose(self.X[idx].sum(axis=0), 1.0):
+                raise ValueError(
+                    "each block must contain every outcome exactly once; the "
+                    "likelihood below sums M_s^-1 over blocks to build "
+                    "X'M^-1 X, which needs X_s to be a permutation matrix")
+        self.Y_rows = y
+        self.V_blocks = [V[np.ix_(idx, idx)] for idx in self.blocks]
         sign, logdet_XtX = np.linalg.slogdet(self.X.T @ self.X)
         self._logdet_XtX = float(logdet_XtX) if sign > 0 else None
-        # The scale below is what "large" means for these data.  Beyond
-        # `_SCALE_LIMIT` times it, log|M| and log|X'M^-1 X| are two numbers of
-        # order kJ*log(lambda) that nearly cancel, and in floating point they
-        # can cancel *past* the true minimum: a fit was observed to report
-        # nll = -2648.9 on data whose best possible value is 9.3, i.e. a
-        # likelihood better than any likelihood.  Rejecting the region is the
-        # only honest response -- the number there is arithmetic, not
-        # statistics.
         self.scale = max(float(np.max(np.diag(V))),
-                         float(np.max(np.var(self.Y, axis=0, ddof=1))),
+                         float(np.max(np.var(y.reshape(len(self.blocks), -1),
+                                             axis=0, ddof=1))),
                          1e-12)
 
     _SCALE_LIMIT = 1e4
@@ -117,39 +129,51 @@ class UNLikelihood:
         Sigma = np.asarray(Sigma, dtype=float)
         if float(np.max(np.diag(Sigma))) > self._SCALE_LIMIT * self.scale:
             return 1e30
-        M = self.V_blocks + Sigma                      # (k, J, J) broadcast
-        sign, logdet = np.linalg.slogdet(M)
-        if np.any(sign <= 0) or not np.all(np.isfinite(logdet)):
-            return 1e30
+        logdet_M = 0.0
+        XtWX = np.zeros((self.J, self.J))
+        W_blocks: list[tuple[np.ndarray, np.ndarray]] = []
+        for idx, V_b in zip(self.blocks, self.V_blocks):
+            outcomes = np.argmax(self.X[idx], axis=1)
+            M_b = V_b + Sigma[np.ix_(outcomes, outcomes)]
+            sign, logdet = np.linalg.slogdet(M_b)
+            if sign <= 0 or not np.isfinite(logdet):
+                return 1e30
+            W_b = np.linalg.inv(M_b)
+            X_b = self.X[idx]
+            XtWX += X_b.T @ W_b @ X_b
+            logdet_M += float(logdet)
+            W_blocks.append((idx, W_b))
         if self._logdet_XtX is None:
             return 1e30
-        W = np.linalg.inv(M)
-        XtWX = W.sum(axis=0)                           # X_s is the identity
-        XtWy = np.einsum("sij,sj->i", W, self.Y)
         sign, logdet_XtWX = np.linalg.slogdet(XtWX)
         if sign <= 0 or not np.isfinite(logdet_XtWX):
             return 1e30
+        XtWy = np.zeros(self.J)
+        for idx, W_b in W_blocks:
+            XtWy += self.X[idx].T @ W_b @ self.Y_rows[idx]
         beta = np.linalg.solve(XtWX, XtWy)
-        r = self.Y - beta
-        rss = float(np.einsum("si,sij,sj->", r, W, r))
+        rss = 0.0
+        for idx, W_b in W_blocks:
+            r_b = self.Y_rows[idx] - self.X[idx] @ beta
+            rss += float(r_b @ W_b @ r_b)
         return 0.5 * (
             (self.n_obs - self.J) * math.log(2 * math.pi)
             - self._logdet_XtX
-            + float(logdet.sum())
+            + logdet_M
             + float(logdet_XtWX)
             + rss
         )
 
 
 def un_reml_nll(y: np.ndarray, V: np.ndarray, X: np.ndarray,
-                Sigma: np.ndarray) -> float:
+                Sigma: np.ndarray, groups: np.ndarray | None = None) -> float:
     """`-l_R` for the UN model; a non-positive-definite `M` gives `1e30`.
 
     A thin wrapper over :class:`UNLikelihood` for one-off evaluations.
     Returned as a negative log-likelihood, i.e. what every optimiser here
     minimises.
     """
-    return UNLikelihood(y, V, X).nll(Sigma)
+    return UNLikelihood(y, V, X, groups=groups).nll(Sigma)
 
 
 # --------------------------------------------------------------------------- #
@@ -312,7 +336,8 @@ def _perturbations(start: np.ndarray, n_starts: int) -> list[np.ndarray]:
 def fit_un(y: np.ndarray, V: np.ndarray, X: np.ndarray, *,
            variant: Parameterisation = "hyper", n_starts: int = 6,
            fixed_rho: np.ndarray | None = None,
-           fixed_tau2: np.ndarray | None = None) -> UNFit:
+           fixed_tau2: np.ndarray | None = None,
+           groups: np.ndarray | None = None) -> UNFit:
     """Maximise `l_R` from many starts, under any of the three maps.
 
     `fixed_rho` / `fixed_tau2` mirror `pimeta`'s `rho=` / `sigma2=` and make a
@@ -324,7 +349,7 @@ def fit_un(y: np.ndarray, V: np.ndarray, X: np.ndarray, *,
     V = np.asarray(V, dtype=float)
     X = np.asarray(X, dtype=float)
     J = X.shape[1]
-    likelihood = UNLikelihood(y, V, X)
+    likelihood = UNLikelihood(y, V, X, groups=groups)
 
     starts = _perturbations(_start_vector(y, V, X, J, variant), n_starts)
     mask = np.ones(starts[0].size, dtype=bool)
