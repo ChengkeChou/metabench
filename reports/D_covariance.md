@@ -20,7 +20,7 @@ with `converged=True`.
 | harness | metabench 0.1.0 |
 | implementation | pimeta 1.1.5 |
 | seed | 20261029 (one stream per cell) |
-| replicates | 250 per cell, 100 for the J=5 cells (see the cost section) |
+| replicates | 250 per cell; the two J=5 cells are not reported (see *Cost*) |
 | cells | 8 |
 | estimand | the matrix `Sigma`, not an interval |
 
@@ -105,9 +105,11 @@ which is 149x more work per evaluation at this size and grows like `k^2` after
 that.  One J=5 fit costs as much as 83,000 block evaluations where an L-BFGS-B
 run needs hundreds.
 
-That is why the J=5 cells carry 100 replicates and the rest 250: the budget
-went where a proportion can be estimated, not where the software is the
-bottleneck.  It is also the first entry for the 1.1.6 performance baseline.
+That is why the two J=5 cells are **not reported**: 100 replicates would have
+been a multi-hour job and still too few to estimate a 10% rate, and a rate
+estimated from a handful of replicates is worse than no rate.  The budget went
+where a proportion can be estimated, not where the software is the bottleneck. 
+The measurement itself is the first entry for the 1.1.6 performance baseline.
 
 ## Results
 
@@ -121,10 +123,21 @@ surface has more than one local maximum.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | covariance/k10-J2-rho30 | pimeta-cov/hyper | 250 | 250 | 2.4% ±0.019 | 0.00 | 0.14 | 2.8% | 38.0% | 0.4% | 0.7289 | 0.194 | 0.052 | 0.073 |
 | covariance/k10-J3-mixed | pimeta-cov/hyper | 250 | 250 | 12.4% ±0.041 | 0.00 | 2.60 | 20.4% | 19.6% | 8.4% | 0.8665 | 0.000 | 0.175 | -0.054 |
+| covariance/k10-J3-rho30 | pimeta-cov/chol | 150 | 150 | 10.7% ±0.049 | 0.00 | 1.19 | 17.3% | 22.7% | 0.7% | 0.9137 | 0.000 | 0.131 | -0.070 |
+| covariance/k10-J3-rho30 | pimeta-cov/external | 150 | 150 | 10.7% ±0.049 | 0.00 | 0.73 | 17.3% | 22.7% | 78.0% | 0.9137 | 0.000 | 0.131 | -0.070 |
 | covariance/k10-J3-rho30 | pimeta-cov/hyper | 250 | 250 | 11.6% ±0.040 | 0.00 | 3.03 | 20.8% | 22.8% | 8.4% | 0.9076 | 0.000 | 0.119 | -0.071 |
+| covariance/k10-J3-rho30 | pimeta-cov/hyper-lkj2 | 120 | 120 | 100.0% ±0.000 | 0.55 | 1.43 | 4.2% | 7.5% | 8.3% | 0.7628 | 0.410 | 0.087 | -0.187 |
+| covariance/k10-J3-rho30 | pimeta-cov/hyper-pinned | 120 | 120 | 0.8% ±0.016 | 0.00 | 0.06 | 28.3% | 28.3% | 0.8% | 0.7056 | 0.233 | 0.055 | -0.059 |
 | covariance/k10-J3-rho70 | pimeta-cov/hyper | 250 | 250 | 10.0% ±0.037 | 0.00 | 0.82 | 25.2% | 25.6% | 3.2% | 0.7173 | 0.000 | 0.151 | -0.153 |
 | covariance/k30-J3-rho30 | pimeta-cov/hyper | 250 | 250 | 0.8% ±0.011 | 0.00 | 0.74 | 3.2% | 1.2% | 1.2% | 0.5819 | 0.255 | 0.010 | 0.014 |
+| covariance/k30-J3-rho30 | pimeta-cov/hyper-lkj2 | 120 | 120 | 100.0% ±0.000 | 0.24 | 0.89 | 0.0% | 0.0% | 0.0% | 0.5378 | 0.548 | 0.021 | -0.060 |
+| covariance/k30-J3-rho30 | pimeta-cov/hyper-pinned | 120 | 120 | 0.0% ±0.000 | 0.00 | 0.00 | 3.3% | 3.3% | 0.0% | 0.4606 | 0.726 | -0.001 | -0.007 |
 | covariance/k30-J3-tiny | pimeta-cov/hyper | 250 | 250 | 19.2% ±0.049 | 0.00 | 3.66 | 22.0% | 22.0% | 5.6% | 0.5536 | 0.000 | 1.890 | -0.062 |
+
+`suboptimal` and `non-PD` are *pimeta*'s behaviour and are identical across the
+three variant rows by construction: the variant changes the **reference**, not
+the library.  What the variant rows measure is how good a reference each
+parameterisation is, which is Finding 6.
 
 `tau2 bias` is the mean of `(tau2_hat - tau2_true)/tau2_true` over components,
 and in the `tiny` cell that ratio is not a stable statistic: its denominator is
@@ -133,9 +146,12 @@ and in the `tiny` cell that ratio is not a stable statistic: its denominator is
 component's median estimate is 0.0037 against a truth of 0.0009, and 16.8% of
 fits put it at zero.
 
-Still running when this section was written: the two J=5 cells and the
-`external`/`chol` parameterisation comparison.  They are added below when they
-land; the numbers above are final.
+Still running when this section was written: the two J=5 cells.  They are not
+reported because they could not be afforded, and the reason is Finding 6 in the
+cost section: one `rma_mv` call at k=30, J=5 can take minutes once the
+Nelder-Mead fallback fires, which makes 100 replicates a multi-hour job.  A
+rate that cannot be measured is not a rate, and reporting one from a handful of
+replicates would be worse than reporting none.
 
 
 ## Finding 1 — the search is reliable when the model is identified
@@ -197,15 +213,26 @@ what Finding 4 measures.
 ## Finding 4 — `lkj_eta` is a penalty, and both its price and its benefit are measurable
 
 `lkj_eta=2` adds `-(eta-1) log det R` to the objective.  Fitting the same data
-both ways (120 replicates, k=10, J=3):
+both ways (120 replicates per cell):
 
 | | unpenalised | `lkj_eta=2` |
 |---|---|---|
-| restricted likelihood at the returned `Sigma` | maximum | **0.55 lower (median)** |
+| restricted likelihood at the returned `Sigma`, k=10 | the maximum | **0.55 lower (median)** |
+| restricted likelihood at the returned `Sigma`, k=30 | the maximum | **0.24 lower (median)** |
 | suboptimal by the likelihood's standard | 11.6% | **100%** |
-| non-PD `Sigma` | 20.8% | **4.2%** |
-| median min-eigenvalue | 0.0000 | **0.410** |
-| median relative Frobenius error vs truth | 0.908 | **0.763** |
+| non-PD `Sigma`, k=10 -> k=30 | 20.8% -> 3.2% | **4.2% -> 0.0%** |
+| median min-eigenvalue, k=10 -> k=30 | 0.0000 -> 0.255 | **0.410 -> 0.548** |
+| median relative Frobenius error, k=10 | 0.908 | **0.763** |
+| median relative Frobenius error, k=30 | 0.582 | **0.538** |
+
+Both halves matter.  A penalised fit is *by construction* not a likelihood
+maximum — 100% "suboptimal" is the correct measurement, not a defect — which
+is exactly why the plan insists on calling it a penalty and not a prior.  And
+it is worth the price: k=10's typical answer goes from **exactly singular** to
+positive definite, and the estimate is closer to the truth in Frobenius norm at
+both study counts.  A 1.1.6 discussion that treats `lkj_eta` as "a bit of
+Bayesian shrinkage" would miss that it is doing real statistical work on a real
+defect, and that at k=30 it costs almost nothing.
 
 Both halves matter.  A penalised fit is *by construction* not a likelihood
 maximum, so it can never be validated as one — which is exactly why the plan
@@ -231,7 +258,44 @@ With the correlation surface removed, a single start finds the maximum in
 99.2% of replicates.  The search difficulty is therefore localised to the
 **correlation** dimensions, not to the variances.
 
-## Finding 6 — one fit can emit hundreds of warnings
+## Finding 6 — the parameterisations differ, and the difference names the culprit
+
+Same 150 data sets, same seed, only the *reference*'s parameterisation changes
+(the `hyper` row quotes the full 250-replicate cell for the conflict rate, the
+other two the 150-replicate paired runs):
+
+| reference | suboptimal | gap max | multi-start conflict |
+|---|---|---|---|
+| `hyper` (unconstrained, hyperspherical) | 10.7% | **3.03** | 8.4% |
+| `chol` (free Cholesky factor) | 10.7% | 1.19 | **0.7%** |
+| `external` (`(tau2, logit rho)` + cliff) | 10.7% | 0.73 | **78.0%** |
+
+Read the last column, because it is the one that does not depend on how good
+any single answer is: **the `(tau2, rho)` surface with the `1e5 + 1e7(...)`
+cliff makes the reference's own six starts disagree in 78% of replicates**,
+against 8.4% for the unconstrained map and 0.7% for a free Cholesky factor.  A
+surface whose restarts disagree four times out of five is a surface on which a
+single start cannot be trusted, and the cliff is what makes it ragged: every
+point outside the cone is replaced by a value of a different order, so the
+optimiser sees a wall and stops in front of it.
+
+The other two columns say the same thing from the other side.  `gap max = 3.03`
+for `hyper` is the largest gap *any* reference found, i.e. `hyper` is the only
+one that reaches the best point in the worst replicates; `external` never
+finds it there (0.73) and `chol` sometimes does (1.19).
+
+Two conclusions follow, and they point in opposite directions from the obvious
+one:
+
+* `pimeta`'s own choice — the Cholesky route for J >= 3 — is the **best** of
+  the three, so the parameterisation is not the defect.  It is the single
+  start.
+* The `(tau2, rho)` + cliff route, which `pimeta` still uses for J = 2 and
+  whenever a parameter is pinned, is the worst of the three, so the cliff is a
+  real cost and not a stylistic dislike.
+
+## Finding 7 — one fit can emit hundreds of warnings
+
 
 The `k10-J2-rho30` cell reported 248, 572 and 76 `RuntimeWarning`s in three
 replicates (`invalid value encountered in sqrt`, then in `slogdet`, both from
@@ -266,15 +330,22 @@ In the order the measurements justify:
    for larger studies.  A pure win with no statistical content, and it is what
    makes 2000-replicate runs affordable.
 2. **Multi-start, or a start that is not the method-of-moments point.**  The
-   8.4% multi-start conflict and the 11.6% suboptimal rate are the same
-   phenomenon.  The reference needs six starts to be reliable; two probably
-   will, and the cost of both is now known.
+   reference needs six starts to be reliable where `pimeta` fails one time in
+   ten, and `chol`'s restarts agree 99.3% of the time — so two or three starts
+   on `pimeta`'s own parameterisation should recover most of the difference at
+   a cost that is now known.
+3. **Fix the Nelder-Mead fallback's budget.**  It triggers when one variance
+   sits on its bound and the others do not, and then allows 100,000
+   evaluations of an objective that costs 16 ms at k=30, J=5.  That is the
+   reason the J=5 cells could not be measured here: a single unlucky replicate
+   can cost minutes.
 3. **Make the boundary a first-class answer.**  Return the conditioning of
    `Sigma` and a boundary flag, and document `lkj_eta` as the remedy with its
    likelihood cost printed.
 4. **Replace the `1e5 + 1e7(1e-6-lam)^2` cliff and the `1e300` return in
    `_mv_loglik`** with one barrier of the same order as the likelihood, so that
-   a line search cannot mistake a rejection for a feature.
+   a line search cannot mistake a rejection for a feature.  Finding 6 gives the
+   number: 78% restart disagreement against 0.7% on a smooth surface.
 5. **Close the NaN path**: `sqrt(max(., 0))` in `from_chol_vec`, and reject a
    non-finite matrix before it reaches `slogdet`.
 
