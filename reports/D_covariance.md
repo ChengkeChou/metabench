@@ -449,3 +449,82 @@ question for the next grid, not for an argument.
 * gradient norms at the returned point.  A finite-difference gradient in the
   external `(tau2, rho)` coordinates is the natural next diagnostic and it
   needs a `start=` entry point that the public API does not have yet.
+
+## 1.1.7: the third start, and what the polish was throwing away
+
+The 1.1.6 numbers left one replicate visibly unexplained: `k10-J3-rho30`,
+replicate 230, where every start stopped 3.03 log-likelihood units above the
+answer.  Chasing it produced two findings, one in `pimeta` and one in this
+harness.
+
+### The harness was calling a boundary fit invalid
+
+`valid_covariance` was the adapter's strict `min(eig) > 0`.  A fit that
+lands on a *singular* Sigma -- a correlation matrix of rank 2, which is exactly
+where the maximum of a 3-outcome UN model often is -- is decided by the last
+bit of the arithmetic: 23 of 250 fits in `k30-J3-rho30` were counted invalid
+with a smallest eigenvalue between -1e-19 and -6e-18, and 1.1.6 the same way
+(9 of 250).  The metric now separates the two regimes by `1e-8` of the
+largest variance and reports the old flag as `non_pd_raw_rate`;
+`tools/resummarise.py` recomputes both sides from the raw JSONL, so nothing
+was re-simulated.  Every cell in the table below reads 0.0% non-PD, before and
+after.  The up-to-25% column printed by earlier versions of this report was an
+artefact of that comparison and should not be quoted.
+
+### The polish discarded a better answer
+
+On the hard replicate the three starts *did* reach 8.687910.  The stall
+fallback then ran Nelder-Mead without bounds, which returned a Cholesky vector
+with a negative diagonal -- the same covariance, since `from_chol_vec` maps
+the mirrored vector to the identical `(tau2, rho)`.  The polish handed that
+point to the bounded L-BFGS-B, scipy clipped the sign to zero, and the clipped
+point is a different covariance: 8.687910 → 11.759299 on the clip, 11.721971
+after the polish.  That was the fit that shipped.  The polish now only replaces
+a point it improves.
+
+Two hypotheses were tested and rejected on the way: a randomised start (0 hits
+in 24 seeds, and widening the off-diagonal draw from 3 to 20 times the typical
+diagonal changed nothing), and a restart-until-settled loop (unnecessary once
+the above was fixed).  Both were removed rather than shipped.
+
+### Re-measured against 1.1.6 (same seed, same replicates)
+
+`python tools/compare_runs.py results_v116 results_v117p`
+
+| cell | suboptimal | gap max | boundary | Frobenius (median) | fit time (median) |
+|---|---|---|---|---|---|
+| `k10-J2-rho30` | 0.0% → 0.0% | 0.000 → 0.000 | 38.0% → 38.0% | 0.729 → 0.729 | 0.39 → **0.28 s** |
+| `k10-J3-mixed` | 5.2% → **0.4%** | 2.596 → **0.000** | 12.0% → 7.2% | 0.869 → 0.867 | 0.88 → **0.80 s** |
+| `k10-J3-rho30` | 6.4% → **0.4%** | 3.034 → **0.000** | 18.8% → 12.8% | 0.908 → 0.910 | 1.06 → **0.82 s** |
+| `k10-J3-rho70` | 5.6% → **1.6%** | 0.824 → **0.000** | 22.8% → 17.2% | 0.717 → 0.717 | 1.10 → **0.78 s** |
+| `k30-J3-rho30` | 0.8% → **0.0%** | 0.742 → **0.000** | 1.2% → 0.4% | 0.582 → 0.582 | 1.63 → **1.52 s** |
+| `k30-J3-tiny` | 8.8% → **1.2%** | 3.655 → **0.000** | 13.6% → 5.6% | 0.559 → 0.562 | 2.86 → **1.99 s** |
+| `k30-J5-rho30` | 4.0% → 3.0% | 0.041 → 0.041 | 0.0% → 0.0% | 0.647 → 0.647 | 7.89 → 8.17 s |
+| `k30-J5-rho70` | 11.0% → **6.0%** | 0.066 → 0.066 | 1.0% → 1.0% | 0.438 → 0.438 | 10.13 → **9.40 s** |
+
+Reading it:
+
+* **The maximisation is now solved in every J=3 cell**: the largest gap to the
+  independent optimum is exactly 0.000 in all six of them, against 0.7 to 3.7
+  before.  What remains (0.0-1.6%) are ties within `1e-6`, not basins.
+* **The third start pays for itself at k=10 and is nearly free at k=30**: fits
+  are 4-26% *faster* than 1.1.6 in seven of eight cells, because the batched
+  likelihood and the shorter walk from a better start more than cover the extra
+  start.  The exception is `k30-J5-rho30` (+3.5% for one replicate); at 15
+  variance parameters the surface is flat and the third start neither finds
+  much nor saves much.
+* **Frobenius is unchanged everywhere**, which is the control: the change moves
+  *which optimum is found*, not how much information the data carry.
+* **The batched likelihood is a 1.2x step, not the 15x step.**  One evaluation
+  at k=30, J=5: 13.1 ms full matrix, 0.151 ms per-block loop (1.1.6), 0.127 ms
+  batched (1.1.7).  The big win was 1.1.6's and this report already credited it
+  there.
+
+### What is left
+
+At k=30, J=5 the suboptimal rate is still 3.0% and 6.0%, with worst gaps of
+0.041 and 0.066 -- the same flats the J=5 section above describes.  The next
+useful measurement is not another start but a *stopping* criterion that can
+tell a flat ridge from a wrong basin: the 1e-6 tolerance cannot, and neither can
+the optimiser status.  A finite-difference gradient norm at the returned point
+would separate them, and it needs the same `start=` entry point as before.

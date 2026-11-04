@@ -48,6 +48,28 @@ def _quantile(values: Sequence[float], q: float) -> float | None:
     return None if not values else float(np.quantile(values, q))
 
 
+#: How far a smallest eigenvalue may fall below zero, relative to the size of
+#: the variances, before the matrix counts as genuinely indefinite.  The
+#: adapter's flag is a strict ``min(eig) > 0.0``, which on a fit that reaches a
+#: *singular* Sigma -- a correlation matrix of rank 2, say -- is decided by the
+#: last bit of the arithmetic: 23 of 250 fits in cell ``k30-J3-rho30`` were
+#: counted invalid with a smallest eigenvalue between -1e-19 and -6e-18, and
+#: whether a given one landed above or below zero has nothing to do with the
+#: estimator.  ``1e-8`` of the largest variance separates "the cone boundary"
+#: from "the wrong side of it" by eight orders of magnitude.
+NON_PD_TOL = 1e-8
+
+
+def _eigen_split(sigma: Any) -> tuple[float, float]:
+    """``(smallest eigenvalue, size of the matrix)`` for a fitted Sigma."""
+    S = np.asarray(sigma, dtype=float)
+    if S.ndim != 2 or S.shape[0] != S.shape[1] or not np.all(np.isfinite(S)):
+        return float("nan"), 0.0
+    lam = float(np.linalg.eigvalsh(0.5 * (S + S.T))[0])
+    scale = float(np.max(np.abs(np.diag(S))))
+    return lam, scale
+
+
 def summarise(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
     reps = len(records)
     failures = sum(1 for r in records if r.get("failure"))
@@ -60,7 +82,27 @@ def summarise(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
                       if (r.get("extra") or {}).get("ref_n_at_best", 1) < 3)
 
     # --- validity (question 1) ------------------------------------------
-    non_pd = sum(1 for r in usable if not r.get("valid_covariance"))
+    #
+    # ``non_pd`` is decided here rather than taken from the adapter's flag, so
+    # that "indefinite" means indefinite and "on the boundary to machine
+    # precision" is counted on its own instead of being called a failure.  The
+    # adapter's flag is still reported, as ``non_pd_raw_rate``, so that a table
+    # can be read against the older runs without pretending nothing changed.
+    non_pd = 0
+    singular = 0
+    non_pd_raw = 0
+    for r in usable:
+        if not r.get("valid_covariance"):
+            non_pd_raw += 1
+        lam, scale = _eigen_split(r["sigma_hat"])
+        if not np.isfinite(lam):
+            non_pd += 1
+            continue
+        tol = NON_PD_TOL * max(scale, np.finfo(float).tiny)
+        if lam < -tol:
+            non_pd += 1
+        elif abs(lam) <= tol:
+            singular += 1
     asymmetric = sum(1 for r in usable
                      if not (r.get("extra") or {}).get("symmetric", True))
     boundary = sum(1 for r in usable if r.get("boundary_hit"))
@@ -113,6 +155,8 @@ def summarise(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "rates": {
             "failure_rate": failures / reps if reps else None,
             "non_pd_rate": non_pd / n if n else None,
+            "non_pd_raw_rate": non_pd_raw / n if n else None,
+            "singular_rate": singular / n if n else None,
             "asymmetric_rate": asymmetric / n if n else None,
             "boundary_rate": boundary / n if n else None,
             "suboptimal_rate": (sum(1 for g in gaps if g > GAP_TOL) / len(gaps)
@@ -144,6 +188,8 @@ def summarise(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "mapping_gap_max": max(mapping) if mapping else None,
         "proportions": {
             "non_pd": _prop(non_pd, n),
+            "non_pd_raw": _prop(non_pd_raw, n),
+            "singular": _prop(singular, n),
             "boundary": _prop(boundary, n),
             "suboptimal": _prop(sum(1 for g in gaps if g > GAP_TOL), len(gaps)),
             "multistart_conflict": _prop(not_at_best, n),
