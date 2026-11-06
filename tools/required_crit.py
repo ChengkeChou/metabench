@@ -21,7 +21,7 @@ import pathlib
 
 import numpy as np
 
-ROOT = pathlib.Path(r"D:\autometa\metabench")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 CELLS = ("k05-rho30", "k10-rho30", "k10-rho70", "k20-rho30", "k20-rho70",
          "k50-rho30")
 REFERENCES = ("chi2", "f", "hk")

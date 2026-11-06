@@ -22,7 +22,7 @@ import pathlib
 
 import numpy as np
 
-ROOT = pathlib.Path(r"D:\autometa\metabench")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 CELLS = ("k05-tau004", "k05-tau013", "k10-tau004", "k10-tau013",
          "k20-tau004", "k20-tau013", "k50-tau004", "k50-tau013",
          "k100-tau004", "k100-tau013")

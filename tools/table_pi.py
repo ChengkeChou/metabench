@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"D:\autometa\metabench")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 rows = []
 for folder in sorted((ROOT / "results").glob("univariate-pi_*")):

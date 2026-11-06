@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"D:\autometa\metabench")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 CELLS = ("k05-rho30", "k10-rho30", "k20-rho30", "k50-rho30")
 REFS = ("chi2", "f", "hk", "bootstrap")
 

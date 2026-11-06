@@ -15,7 +15,7 @@ import sys
 
 import numpy as np
 
-ROOT = pathlib.Path(r"D:\autometa\metabench")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def load(scenario: str, adapter: str) -> list[dict]:

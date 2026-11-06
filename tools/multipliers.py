@@ -12,7 +12,7 @@ import pathlib
 
 import numpy as np
 
-ROOT = pathlib.Path(r"D:\autometa\metabench\results")
+ROOT = pathlib.Path(__file__).resolve().parents[1] / "results"
 CELLS = ("multivariate_k05-rho30", "multivariate_k10-rho30",
          "multivariate_k20-rho30", "multivariate_k50-rho30",
          "multivariate_k10-rho70", "multivariate_k20-rho70",

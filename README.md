@@ -94,7 +94,7 @@ python tools/run_grid.py pi-rules  --reps 2000 --workers 4    # candidate correc
 ```
 
 Python needs `src/pimeta` (or an installed pimeta) and the metabench root on the
-path: `$env:PYTHONPATH="D:\autometa\pimeta\src;D:\autometa\metabench"`.
+path: `PYTHONPATH=<path-to-pimeta>/src:<path-to-metabench>`.
 
 ## Families
 
@@ -160,8 +160,8 @@ installed as a package — clone and run.
 ```
 git clone https://github.com/ChengkeChou/metabench.git
 pip install pimeta
-$env:PYTHONPATH="D:\autometa\metabench"          # or: export PYTHONPATH=...
-python -m pytest tests                            # 34 tests
+export PYTHONPATH=$PWD/metabench        # PowerShell: $env:PYTHONPATH="$PWD\metabench"
+python -m pytest tests                 # 34 tests
 ```
 
 ## Status

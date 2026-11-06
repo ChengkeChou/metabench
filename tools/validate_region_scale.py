@@ -13,7 +13,7 @@ import pathlib
 
 import numpy as np
 
-ROOT = pathlib.Path(r"D:\autometa\metabench")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: (cell, reference, multiplier) — each multiplier was read off the formal run
 #: (seed A) as ``required / crit`` and is applied unchanged here (seed B)
 CELLS = (("k05-rho30", "f", 2.30), ("k10-rho30", "f", 4.39),
