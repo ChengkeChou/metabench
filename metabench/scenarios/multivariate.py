@@ -107,4 +107,20 @@ SCENARIOS: dict[str, Scenario] = {
         "multivariate/k50-rho30", k=50, tau2=(0.04, 0.09), se=(0.20, 0.25),
         rho=0.3, notes="the asymptotic reference should be adequate here; if "
                        "it is not, the problem is not the sample size"),
+    # -- more outcomes: the covariance has J(J+1)/2 parameters, so J=3 needs 6
+    # and J=5 needs 15 estimated from the same k studies.  These cells exist to
+    # find out whether the small-k multiplier measured at J=2 carries over.
+    "multivariate/k10-J3-rho30": scenario(
+        "multivariate/k10-J3-rho30", k=10, tau2=(0.04, 0.06, 0.09),
+        se=(0.20, 0.22, 0.25), rho=0.3, mu=(0.0, 0.0, 0.0),
+        notes="J=3 at k=10: six variance parameters from ten studies"),
+    "multivariate/k20-J3-rho30": scenario(
+        "multivariate/k20-J3-rho30", k=20, tau2=(0.04, 0.06, 0.09),
+        se=(0.20, 0.22, 0.25), rho=0.3, mu=(0.0, 0.0, 0.0)),
+    "multivariate/k20-J5-rho30": scenario(
+        "multivariate/k20-J5-rho30", k=20,
+        tau2=(0.04, 0.05, 0.06, 0.075, 0.09),
+        se=(0.20, 0.21, 0.22, 0.235, 0.25), rho=0.3,
+        mu=(0.0, 0.0, 0.0, 0.0, 0.0),
+        notes="J=5 at k=20: fifteen variance parameters"),
 }

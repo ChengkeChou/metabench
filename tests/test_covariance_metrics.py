@@ -57,9 +57,31 @@ def test_the_reference_winning_is_counted_separately():
 
 
 def test_a_boundary_fit_is_not_a_valid_covariance():
+    """The adapter's flag and the matrix are two different questions.
+
+    Since 1.1.7 the harness stops calling a boundary fit indefinite: the flag
+    says the *estimator* went to the edge, while ``non_pd_rate`` asks whether the
+    matrix it returned is a covariance.  A boundary fit whose matrix is still
+    positive definite is therefore a valid covariance that hit a boundary, and
+    both facts are reported separately.
+    """
     summary = cm.summarise([_record(TRUTH, TRUTH, boundary=True, valid=False)])
     assert summary["rates"]["boundary_rate"] == 1.0
+    assert summary["rates"]["non_pd_rate"] == 0.0
+    assert summary["rates"]["non_pd_raw_rate"] == 1.0
+
+
+def test_an_indefinite_matrix_is_counted_as_non_pd():
+    indefinite = np.array([[0.04, 0.10], [0.10, 0.09]])   # det < 0
+    summary = cm.summarise([_record(indefinite, TRUTH, valid=False)])
     assert summary["rates"]["non_pd_rate"] == 1.0
+
+
+def test_a_singular_matrix_is_counted_on_its_own():
+    singular = np.array([[0.04, 0.06], [0.06, 0.09]])     # exactly rank 1
+    summary = cm.summarise([_record(singular, TRUTH)])
+    assert summary["rates"]["non_pd_rate"] == 0.0
+    assert summary["rates"]["singular_rate"] == 1.0
 
 
 def test_failures_stay_in_the_denominator():

@@ -110,3 +110,35 @@ SCENARIOS: dict[str, Scenario] = {
         "univariate/fixed", k=20, mu=0.2, tau2=0.0, se=0.2,
         notes="no heterogeneity: tau2 on the boundary"),
 }
+
+
+#: The prediction-interval sweep.  A prediction interval covers the *true
+#: effect of one new study*, which is a different estimand from the mean, and
+#: the classical Higgins-Thompson-Spiegelhalter interval charges the t
+#: distribution with ``k - 1`` degrees of freedom for the sampling of tau^2.
+#: The deficit of a joint region was ``O(1/k)``; this sweep measures whether a
+#: single interval has the same signature, and where it becomes nominal.
+#:
+#: ``k`` runs from 5 (the smallest size a meta-analysis is ever fitted at) to
+#: 100; ``tau2`` covers a mild (I^2 ~ 50 % at se = 0.2) and a strong
+#: heterogeneity case, because the interval's width is dominated by tau^2 and a
+#: boundary estimate is the failure mode at small ``k``.
+PI_CELLS: dict[str, dict[str, float]] = {
+    "k05-tau004": {"k": 5, "tau2": 0.04},
+    "k05-tau013": {"k": 5, "tau2": 0.13},
+    "k10-tau004": {"k": 10, "tau2": 0.04},
+    "k10-tau013": {"k": 10, "tau2": 0.13},
+    "k20-tau004": {"k": 20, "tau2": 0.04},
+    "k20-tau013": {"k": 20, "tau2": 0.13},
+    "k50-tau004": {"k": 50, "tau2": 0.04},
+    "k50-tau013": {"k": 50, "tau2": 0.13},
+    "k100-tau004": {"k": 100, "tau2": 0.04},
+    "k100-tau013": {"k": 100, "tau2": 0.13},
+}
+
+for _cell, _spec in PI_CELLS.items():
+    SCENARIOS[f"univariate-pi/{_cell}"] = scenario(
+        f"univariate-pi/{_cell}", k=int(_spec["k"]), mu=0.2,
+        tau2=float(_spec["tau2"]), se=0.2,
+        notes=f"prediction-interval sweep: k={int(_spec['k'])}, "
+              f"tau2={_spec['tau2']}, equal within-study se")

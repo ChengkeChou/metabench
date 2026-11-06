@@ -1,5 +1,10 @@
 # B — the joint prediction region, screening run
 
+> **Superseded in part by `B2_joint_region_formal.md`**, which re-measures the
+> `k = 5, 10, 20` cells at 2000 replicates, measures the parametric bootstrap,
+> and validates a scaled-reference correction on an independent seed. The
+> findings below all survive; the numbers quoted there are the ones to cite.
+
 Family **B** of the research plan: a joint interval for a *new study's* effect
 vector, `pimeta.predict_region`, fitted with `random="~ outcome | study"`,
 `struct="UN"`.

@@ -6,6 +6,8 @@ from .base import Adapter, FitRecord
 from .pimeta_adapter import PimetaAdapter
 from .pimeta_cov_adapter import VARIANTS as COV_VARIANTS
 from .pimeta_cov_adapter import PimetaCovAdapter
+from .pimeta_pi_adapter import RULES as PI_RULES
+from .pimeta_pi_adapter import PimetaPiAdapter
 from .pimeta_region_adapter import PimetaRegionAdapter
 
 ALL: dict[str, type] = {
@@ -13,6 +15,8 @@ ALL: dict[str, type] = {
     "pimeta-region/chi2": PimetaRegionAdapter,
     "pimeta-region/f": PimetaRegionAdapter,
     "pimeta-region/hk": PimetaRegionAdapter,
+    "pimeta-region/bootstrap": PimetaRegionAdapter,
+    **{f"pimeta-pi/{v}": PimetaPiAdapter for v in PI_RULES},
     **{f"pimeta-cov/{v}": PimetaCovAdapter for v in COV_VARIANTS},
     "pimeta-cov/hyper-lkj2": PimetaCovAdapter,
     "pimeta-cov/hyper-pinned": PimetaCovAdapter,
@@ -33,8 +37,17 @@ class _Bound:
 def get(name: str) -> Adapter:
     if name == "pimeta":
         return PimetaAdapter()
+    if name.startswith("pimeta-pi/"):
+        return PimetaPiAdapter(rule=name.split("/", 1)[1])
     if name.startswith("pimeta-region/"):
-        return PimetaRegionAdapter(method=name.split("/", 1)[1])
+        rest = name.split("/", 1)[1]
+        scale = 1.0
+        if "@" in rest:                      # e.g. bootstrap@100, f@2.5
+            rest, tag = rest.split("@", 1)
+            if rest == "bootstrap":
+                return PimetaRegionAdapter(method=rest, n_boot=int(tag))
+            scale = float(tag)
+        return PimetaRegionAdapter(method=rest, scale=scale)
     if name.startswith("pimeta-cov/"):
         rest = name.split("/", 1)[1]
         if rest.endswith("-pinned"):
